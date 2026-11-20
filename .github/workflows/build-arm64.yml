@@ -1,4 +1,4 @@
-name: Build · box64 ARM64
+name: Build · box64 ARM64 (Android)
 
 on:
   push:
@@ -10,8 +10,8 @@ permissions:
 
 jobs:
   build:
-    name: box64 — ARM64 native
-    runs-on: ubuntu-24.04-arm
+    name: box64 — Android arm64 (NDK / Bionic)
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -21,31 +21,40 @@ jobs:
       - name: Install build deps
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y cmake ninja-build build-essential
+          sudo apt-get install -y cmake ninja-build
 
-      - name: Build box64
+      - name: Build box64 (Android NDK → Bionic)
+        env:
+          NDK: ${{ env.ANDROID_NDK_LATEST_HOME }}
         run: |
           mkdir build && cd build
-          cmake .. -G Ninja -DARM_DYNAREC=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake .. \
+            -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-28 \
+            -DARM_DYNAREC=ON \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo
           ninja -j$(nproc)
-          strip box64
+          "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip" box64
 
       - name: Metadata
         id: meta
         run: |
-          echo "tag=box64-arm64-$(date +%Y%m%d)-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "tag=box64-android-arm64-$(date +%Y%m%d)-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
           echo "date=$(date +%Y%m%d)" >> $GITHUB_OUTPUT
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
-          name: "box64 ARM64 · ${{ steps.meta.outputs.date }}"
+          name: "box64 Android ARM64 · ${{ steps.meta.outputs.date }}"
           make_latest: true
           body: |
-            **Target:** ARM64 / aarch64 — Adreno 619
+            **Target:** Android arm64-v8a (Bionic libc) — API 28+
+            **Device:** Redmi Note 11 Pro 5G / Adreno 619
 
-            ### CloudMobiR STEP 5 (replaces build-from-source)
+            ### CloudMobiR STEP 5
             ```bash
             curl -L https://github.com/dvaustria741-a11y/box64/releases/latest/download/box64 \
               -o $PREFIX/bin/box64 && chmod +x $PREFIX/bin/box64 && box64 --version
