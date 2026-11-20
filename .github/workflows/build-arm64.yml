@@ -23,26 +23,39 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y cmake ninja-build
 
+      - name: Set up Android NDK
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27d
+          add-to-path: false
+
+      - name: Verify NDK
+        env:
+          NDK: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          test -n "$NDK"
+          test -f "$NDK/build/cmake/android.toolchain.cmake"
+          echo "NDK path: $NDK"
+
       - name: Build box64 (Android NDK → Bionic)
         env:
-          NDK: ${{ env.ANDROID_NDK_LATEST_HOME }}
+          NDK: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
-          mkdir build && cd build
-          cmake .. \
-            -G Ninja \
+          cmake -S . -B build -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
             -DANDROID_ABI=arm64-v8a \
             -DANDROID_PLATFORM=android-28 \
             -DARM_DYNAREC=ON \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo
-          ninja -j$(nproc)
-          "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip" box64
+          cmake --build build --parallel 2
+          "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip" build/box64
 
       - name: Metadata
         id: meta
         run: |
-          echo "tag=box64-android-arm64-$(date +%Y%m%d)-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-          echo "date=$(date +%Y%m%d)" >> $GITHUB_OUTPUT
+          echo "tag=box64-android-arm64-$(date +%Y%m%d)-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "date=$(date +%Y%m%d)" >> "$GITHUB_OUTPUT"
 
       - name: Release
         uses: softprops/action-gh-release@v2
