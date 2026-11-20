@@ -1,0 +1,53 @@
+name: Build · box64 ARM64
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: box64 — ARM64 native
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cmake ninja-build build-essential
+
+      - name: Build box64
+        run: |
+          mkdir build && cd build
+          cmake .. -G Ninja -DARM_DYNAREC=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          ninja -j$(nproc)
+          strip box64
+
+      - name: Metadata
+        id: meta
+        run: |
+          echo "tag=box64-arm64-$(date +%Y%m%d)-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "date=$(date +%Y%m%d)" >> $GITHUB_OUTPUT
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: "box64 ARM64 · ${{ steps.meta.outputs.date }}"
+          make_latest: true
+          body: |
+            **Target:** ARM64 / aarch64 — Adreno 619
+
+            ### CloudMobiR STEP 5 (replaces build-from-source)
+            ```bash
+            curl -L https://github.com/dvaustria741-a11y/box64/releases/latest/download/box64 \
+              -o $PREFIX/bin/box64 && chmod +x $PREFIX/bin/box64 && box64 --version
+            ```
+          files: build/box64
